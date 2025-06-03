@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Login Success</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 
+                         'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #171a21 0%, #1b2838 100%);
+            color: #c7d5e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            padding: 30px;
+            background: rgba(42, 71, 94, 0.9);
+            border-radius: 20px;
+            border: 1px solid rgba(103, 193, 245, 0.2);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(23, 26, 33, 0.6);
+            max-width: 400px;
+        }
+        .spinner {
+            border: 4px solid #2a475e;
+            border-top: 4px solid #66c0f4;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .refresh-message {
+            color: #66c0f4;
+            font-weight: 600;
+        }
+        .success-icon {
+            color: #28a745;
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #8f98a0;
+            display: none;
+        }
+        .error-message {
+            color: #ff6b6b;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h2 id="title">Steam Login Successful!</h2>
+        <div class="spinner"></div>
+        <p id="message">Saving your data and redirecting...</p>
+        <p id="error-message" class="error-message" style="display: none;"></p>
+        
+        <div class="debug-info" id="debug-info">
+            <p>Steam ID: <span id="debug-steamid"></span></p>
+            <p>Games Count: <span id="debug-games"></span></p>
+            <p style="visibility: hidden;">Is Refresh: <span id="debug-refresh"></span></p>
+        </div>
+    </div>
+
+    <script>
+        // Enable debug info in development
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            document.getElementById('debug-info').style.display = 'block';
+        }
+
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            document.getElementById('message').style.display = 'none';
+        }
+
+        function redirectWithError(error) {
+            setTimeout(() => {
+                window.location.href = `/?error=${error}`;
+            }, 2000);
+        }
+
+        // Get the data passed from Flask
+        let steamData;
+        try {
+            steamData = {{ data | safe }};
+            console.log('Steam data received:', steamData);
+        } catch (error) {
+            console.error('Error parsing Steam data:', error);
+            showError('Error processing Steam data');
+            redirectWithError('data_parse_failed');
+            throw error;
+        }
+
+        if (!steamData || !steamData.user || !steamData.user.steamid) {
+            console.error('Invalid Steam data:', steamData);
+            showError('Invalid Steam data received');
+            redirectWithError('invalid_data');
+            throw new Error('Invalid Steam data');
+        }
+
+        // Update debug info
+        document.getElementById('debug-steamid').textContent = steamData.user.steamid;
+        document.getElementById('debug-games').textContent = steamData.games?.length || 0;
+        document.getElementById('debug-refresh').textContent = steamData.is_refresh ? 'Yes' : 'No';
+
+        // Update UI based on whether this is a refresh
+        if (steamData.is_refresh) {
+            document.getElementById('title').textContent = 'Account Refreshed!';
+            document.getElementById('message').innerHTML = 
+                '<span class="refresh-message">Updated game library data</span><br>Redirecting back...';
+        }
+
+        // Handle localStorage operations
+        try {
+            // Get existing accounts
+            const existingAccountsJson = localStorage.getItem('steamAccounts');
+            let existingAccounts = [];
+
+            if (existingAccountsJson) {
+                try {
+                    existingAccounts = JSON.parse(existingAccountsJson);
+                    if (!Array.isArray(existingAccounts)) {
+                        console.warn('Existing accounts is not an array, resetting');
+                        existingAccounts = [];
+                    }
+                } catch (parseError) {
+                    console.error('Error parsing existing accounts:', parseError);
+                    existingAccounts = [];
+                }
+            }
+
+            // Prepare account data
+            const accountData = {
+                user: steamData.user,
+                games: steamData.games || [],
+                timestamp: steamData.timestamp || Date.now()
+            };
+
+            // Find existing account
+            const existingIndex = existingAccounts.findIndex(
+                account => account.user && account.user.steamid === steamData.user.steamid
+            );
+
+            // Update or add account
+            if (existingIndex >= 0) {
+                existingAccounts[existingIndex] = accountData;
+            } else {
+                existingAccounts.push(accountData);
+            }
+
+            // Save to localStorage
+            const accountsJson = JSON.stringify(existingAccounts);
+            localStorage.setItem('steamAccounts', accountsJson);
+
+            // Verify save
+            const verifyJson = localStorage.getItem('steamAccounts');
+            if (verifyJson !== accountsJson) {
+                throw new Error('Failed to verify localStorage save');
+            }
+
+            // Success - redirect
+            const redirectDelay = steamData.is_refresh ? 1500 : 2000;
+            const successParam = steamData.is_refresh ? 'refresh' : 'login';
+            
+            setTimeout(() => {
+                window.location.href = `/?success=${successParam}`;
+            }, redirectDelay);
+
+        } catch (error) {
+            console.error('Error handling account data:', error);
+            showError('Error saving account data');
+            redirectWithError('save_failed');
+        }
+    </script>
+</body>
+</html>
