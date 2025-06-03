@@ -190,7 +190,7 @@ class SearchManager {
             message = `No games found for "<strong>${this.searchTerm}</strong>"`;
             // Add extra message for short search terms that aren't in the acronyms list
             if (this.searchTerm.length <= 5) {
-              message += `<br><span class="acronym-help">If this is a game acronym and you'd like to contribute, please visit our <a href="https://github.com/olayzen/steam-linux-checker" target="_blank" rel="noopener noreferrer">GitHub project</a> to add it!</span>`;
+              message += `<br><span class="acronym-help">If this is a game acronym and you'd like to contribute, please visit our <a href="https://github.com/OlaYZen/steam-linux-checker/blob/main/static/js/gameAcronyms.json" target="_blank" rel="noopener noreferrer">GitHub project</a> to add it!</span>`;
             }
           }
           
